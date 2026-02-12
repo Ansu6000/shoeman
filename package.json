@@ -1,9 +1,8 @@
 {
   "name": "shoeman",
   "version": "1.0.0",
-  "description": "Shoeman - Find your perfect shoes by scanning the web",
+  "private": true,
   "dependencies": {
-    "cors": "^2.8.5",
     "node-fetch": "^3.3.2"
   }
 }
