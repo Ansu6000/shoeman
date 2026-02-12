@@ -1,23 +1,14 @@
 {
     "version": 2,
-    "builds": [
+    "public": false,
+    "rewrites": [
         {
-            "src": "api/search.js",
-            "use": "@vercel/node"
+            "source": "/api/(.*)",
+            "destination": "/api/$1"
         },
         {
-            "src": "(index.html|search.html|app.js|data.js|questions.js|styles.css|*.png)",
-            "use": "@vercel/static"
-        }
-    ],
-    "routes": [
-        {
-            "src": "/api/search",
-            "dest": "api/search.js"
-        },
-        {
-            "src": "/(.*)",
-            "dest": "/$1"
+            "source": "/(.*)",
+            "destination": "/public/$1"
         }
     ]
 }
