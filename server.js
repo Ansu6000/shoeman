@@ -122,11 +122,8 @@ async function fetchProductData(brand, model, { size, gender, budgetMin, budgetM
 
 const app = express();
 app.use(cors());
-app.use(express.static(path.join(__dirname)));
 
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
+// API ONLY - Static files are served natively by Vercel from the root
 
 // ==================================================================================
 // SCORING ENGINE
