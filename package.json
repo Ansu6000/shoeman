@@ -2,7 +2,6 @@
   "name": "shoeman",
   "version": "1.0.0",
   "description": "Shoeman - Find your perfect shoes by scanning the web",
-  "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js"
