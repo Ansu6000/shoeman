@@ -1,4 +1,4 @@
-const { shoeCatalog, priceRanges } = require('../data.cjs');
+const { shoeCatalog, priceRanges } = require('./data.cjs');
 
 // Logic for fetching product data
 let fetch;
