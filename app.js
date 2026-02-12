@@ -2,7 +2,7 @@
 import { shoeCategories, priceRanges, sizeOptions } from './data.js';
 import { questionTree } from './questions.js';
 
-const API_URL = 'http://localhost:3000/api';
+const API_URL = '/api';
 
 // Icons (Lucide Style SVGs) - Retained
 const ICONS = {

@@ -6,7 +6,7 @@ const { shoeCatalog, priceRanges } = require('./data.cjs');
 
 // Dynamic import for node-fetch (ESM module)
 let fetch;
-(async () => { fetch = (await import('node-fetch')).default; })();
+const fetchReady = (async () => { fetch = (await import('node-fetch')).default; })();
 
 const SERPAPI_KEY = process.env.SERPAPI_KEY || '16fad441d9fe8cf7b5db01ebdc42dd99cf42c05c1d5ec70da366ba4d55786ded';
 
@@ -55,6 +55,7 @@ async function fetchProductData(brand, model, { size, gender, budgetMin, budgetM
         return price >= lowerBound && price <= upperBound;
     }
 
+    await fetchReady; // ensure node-fetch is loaded
     try {
         const parts = [brand, model];
         if (gender) parts.push(gender === 'men' ? "men's" : "women's");
@@ -121,7 +122,11 @@ async function fetchProductData(brand, model, { size, gender, budgetMin, budgetM
 
 const app = express();
 app.use(cors());
-app.use(express.static('.'));
+app.use(express.static(path.join(__dirname)));
+
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // ==================================================================================
 // SCORING ENGINE
@@ -388,7 +393,13 @@ function explainSelection(shoe, selections) {
     return parts.slice(0, 3).join(" ");
 }
 
-const PORT = 3000;
-app.listen(PORT, () => {
-    console.log(`\n🚀 Shoeman Internal Engine running at http://localhost:${PORT}\n`);
-});
+// Export for Vercel serverless
+module.exports = app;
+
+// Only listen when running locally (not on Vercel)
+if (!process.env.VERCEL) {
+    const PORT = 3000;
+    app.listen(PORT, () => {
+        console.log(`\n🚀 Shoeman Internal Engine running at http://localhost:${PORT}\n`);
+    });
+}
