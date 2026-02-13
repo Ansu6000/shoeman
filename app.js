@@ -50,14 +50,23 @@ const selections = {
 };
 
 // Initialize
-document.addEventListener('DOMContentLoaded', init);
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
 
 function init() {
-    renderGender();
-    renderCategories();
-    renderSizes();
-    renderBudget();
-    updateUI();
+    console.log("Shoeman App Initializing...");
+    try {
+        renderGender();
+        renderCategories();
+        renderSizes();
+        renderBudget();
+        updateUI();
+    } catch (e) {
+        console.error("Initialization error:", e);
+    }
 }
 
 // ========================
@@ -66,8 +75,14 @@ function init() {
 
 function renderGender() {
     const cards = document.querySelectorAll('#genderGrid .option-card');
+    if (cards.length === 0) {
+        console.warn('renderGender: No gender cards found!');
+        return;
+    }
+    console.log(`renderGender: Attaching listeners to ${cards.length} cards`);
     cards.forEach(card => {
         card.onclick = () => {
+            console.log('Gender selected:', card.dataset.value);
             selections.gender = card.dataset.value;
             cards.forEach(c => c.classList.remove('selected'));
             card.classList.add('selected');
@@ -78,8 +93,17 @@ function renderGender() {
 
 function renderCategories() {
     const grid = document.getElementById('categoryGrid');
-    if (!grid) return;
+    if (!grid) {
+        console.warn('renderCategories: #categoryGrid not found');
+        return;
+    }
     grid.innerHTML = '';
+
+    if (!shoeCategories || shoeCategories.length === 0) {
+        console.error('renderCategories: No categories data available!');
+        grid.innerHTML = '<p class="error-msg">Failed to load categories.</p>';
+        return;
+    }
 
     shoeCategories.forEach(category => {
         const card = document.createElement('div');
