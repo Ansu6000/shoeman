@@ -1,6 +1,9 @@
 {
   "name": "shoeman",
   "version": "1.0.0",
+  "scripts": {
+    "build": "echo 'No build step'"
+  },
   "dependencies": {
     "node-fetch": "^3.3.2"
   }
