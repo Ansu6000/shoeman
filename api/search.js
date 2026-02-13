@@ -1,12 +1,48 @@
-const { shoeCatalog, priceRanges } = require('../lib/data.js');
-
+// Standalone Deployment - No external file dependencies
 const SERPAPI_KEY = process.env.SERPAPI_KEY || '16fad441d9fe8cf7b5db01ebdc42dd99cf42c05c1d5ec70da366ba4d55786ded';
 
+// Minimal inlined data to prevent import errors
+const priceRanges = [
+    { "id": "2k-5k", "label": "₹2k - ₹5k", "min": 2000, "max": 4999 },
+    { "id": "5k-7k", "label": "₹5k - ₹7k", "min": 5000, "max": 6999 },
+    { "id": "7k-10k", "label": "₹7k - ₹10k", "min": 7000, "max": 9999 },
+    { "id": "10k-15k", "label": "₹10k - ₹15k", "min": 10000, "max": 14999 },
+    { "id": "15k+", "label": "₹15k +", "min": 15000, "max": 100000 }
+];
+
+const shoeCatalog = [
+    {
+        "id": "nike-pegasus-40",
+        "brand": "Nike",
+        "model": "Pegasus 40",
+        "category": "Running & Sports",
+        "gender": ["Men"],
+        "min_price": 11000,
+        "max_price": 13000,
+        "attributes": { "vibe": ["Sporty"], "cushion": "Balanced" }
+    },
+    {
+        "id": "nike-pegasus-40-women",
+        "brand": "Nike",
+        "model": "Pegasus 40 Women",
+        "category": "Running & Sports",
+        "gender": ["Women"],
+        "min_price": 11000,
+        "max_price": 13000,
+        "attributes": { "vibe": ["Sporty"], "cushion": "Balanced" }
+    }
+];
+
+// Use CommonJS export for stability
 module.exports = async (req, res) => {
-    // Standard Vercel Headers for CORS
+    // 1. Handle CORS immediately
+    res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader(
+        'Access-Control-Allow-Headers',
+        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+    );
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
@@ -14,75 +50,70 @@ module.exports = async (req, res) => {
 
     try {
         const { category, gender, budgetTier, size, attributes } = req.query;
-        if (!category && !gender) return res.status(200).json({ status: "alive" });
 
-        let attrObj = {};
-        try {
-            attrObj = attributes ? JSON.parse(attributes) : {};
-        } catch (e) { /* ignore parse error */ }
-
-        const budgetRange = priceRanges.find(r => r.id === budgetTier);
-        const targetGender = gender?.toLowerCase().trim();
-        const targetCategory = category?.toLowerCase().trim();
-
+        // 2. Filter Local Catalog (Minimal Match)
         const candidates = shoeCatalog.filter(shoe => {
-            const genders = shoe.gender?.map(g => g.toLowerCase().trim()) || [];
-            if (!genders.includes(targetGender)) return false;
-            // Handle broader category match
-            if (targetCategory && shoe.category) {
-                const catLower = shoe.category.toLowerCase();
-                // if e.g. "Running & Sports" vs "Running", try simple substring match
-                const simpleCat = targetCategory.split(' ')[0];
-                if (!catLower.includes(simpleCat)) return false;
-            }
-            if (budgetRange && (shoe.min_price > budgetRange.max || shoe.max_price < budgetRange.min)) return false;
+            if (gender && !shoe.gender.some(g => g.toLowerCase() === gender.toLowerCase())) return false;
             return true;
+        }).slice(0, 5); // Take top 5 basic matches
+
+        // 3. ENHANCE with Live Data (SerpAPI)
+        // We will search for exactly what the user asked for, using the local matches mainly as query templates
+        // or just constructing a raw smart query.
+
+        const targetGender = gender === 'men' ? "Men's" : "Women's";
+        const targetCategory = category || "Shoes";
+        // Construct a specific query for SerpAPI
+        const searchQuery = `${targetGender} ${targetCategory} shoes ${size ? 'Size UK ' + size : ''}`;
+
+        console.log("Fetching SerpAPI:", searchQuery);
+
+        const usp = new URLSearchParams({
+            engine: "google_shopping",
+            q: searchQuery,
+            api_key: SERPAPI_KEY,
+            num: "5",
+            gl: "in",
+            hl: "en",
+            location: "India"
         });
 
-        // Simple scoring
-        const scored = candidates.map(shoe => {
-            let score = 0;
-            if (shoe.category === category) score += 3;
-            return { ...shoe, score };
-        }).sort((a, b) => b.score - a.score).slice(0, 5);
+        const serpUrl = `https://serpapi.com/search.json?${usp.toString()}`;
 
-        // Use Global fetch (Node 18+)
-        const results = await Promise.all(scored.map(async (shoe) => {
-            const query = encodeURIComponent(`${shoe.brand} ${shoe.model} ${targetGender} shoes ${size ? `UK ${size}` : ''}`);
-            const url = `https://serpapi.com/search.json?engine=google_shopping&q=${query}&api_key=${SERPAPI_KEY}&num=3&gl=in&hl=en&location=India`;
+        const resp = await fetch(serpUrl);
+        const data = await resp.json();
 
-            let data = { shopping_results: [] };
-            try {
-                const resp = await fetch(url);
-                if (resp.ok) {
-                    data = await resp.json();
-                } else {
-                    console.error("SerpAPI fetch failed for:", query, resp.status);
-                }
-            } catch (e) { console.error("SerpAPI Error:", e.message); }
+        if (data.error) {
+            console.error("SerpAPI Error:", data.error);
+            // Fallback to local candidates if API fails but we don't crash
+            return res.status(200).json({
+                recommendations: candidates.map(c => ({
+                    brand: c.brand,
+                    model: c.model,
+                    price: c.min_price,
+                    live_price: c.min_price,
+                    image: '', // Needs a fallback image
+                    best_link: 'https://google.com',
+                    source: 'Local Catalog Fallback'
+                }))
+            });
+        }
 
-            const best = data.shopping_results?.[0] || {};
-
-            // Fallback image if SerpAPI fails
-            const defaultImages = {
-                'Nike': 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400&h=400&fit=crop',
-                // Other fallbacks handled by frontend BRAND_IMAGES if null
-            };
-
-            return {
-                brand: shoe.brand,
-                model: shoe.model,
-                price: shoe.min_price,
-                live_price: best.extracted_price || null,
-                image: best.thumbnail || defaultImages[shoe.brand] || '',
-                best_link: best.product_link || `https://www.google.com/search?q=${query}&tbm=shop`,
-                source: best.source || 'Google Shopping'
-            };
+        // Transform SerpAPI results
+        const results = (data.shopping_results || []).map(item => ({
+            brand: item.source || item.title.split(' ')[0],
+            model: item.title,
+            price: item.extracted_price || 0,
+            live_price: item.extracted_price,
+            image: item.thumbnail,
+            best_link: item.product_link,
+            source: item.source || "Google Shopping"
         }));
 
         res.status(200).json({ recommendations: results });
+
     } catch (e) {
-        console.error("API Error detailed:", e);
-        res.status(500).json({ error: "Internal Error", details: e.message });
+        console.error("Critical API Error:", e);
+        res.status(500).json({ error: e.message });
     }
-};
+}
