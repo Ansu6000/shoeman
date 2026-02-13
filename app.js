@@ -1,6 +1,190 @@
 
-import { shoeCategories, priceRanges, sizeOptions } from './data.js';
-import { questionTree } from './questions.js';
+// Data Inlined for Standalone Usage
+const shoeCategories = [
+    {
+        id: "Running & Sports",
+        name: "Running & Sports",
+        description: "Performance gear",
+        icon: "road"
+    },
+    {
+        id: "Sneakers",
+        name: "Sneakers",
+        description: "Street style & daily",
+        icon: "sneakers"
+    },
+    {
+        id: "Casual",
+        name: "Casual",
+        description: "Relaxed comfort",
+        icon: "coffee"
+    },
+    {
+        id: "Formal",
+        name: "Formal",
+        description: "Sharp & professional",
+        icon: "briefcase"
+    }
+];
+
+const priceRanges = [
+    { id: "2k-5k", label: "₹2k - ₹5k", min: 2000, max: 4999, tag: "Budget Friendly" },
+    { id: "5k-7k", label: "₹5k - ₹7k", min: 5000, max: 6999, tag: "Value Pick" },
+    { id: "7k-10k", label: "₹7k - ₹10k", min: 7000, max: 9999, tag: "Mid Range" },
+    { id: "10k-15k", label: "₹10k - ₹15k", min: 10000, max: 14999, tag: "Premium" },
+    { id: "15k+", label: "₹15k +", min: 15000, max: 100000, tag: "Luxury" }
+];
+
+const sizeOptions = [
+    { uk: 3, us: 4, eu: 36 },
+    { uk: 4, us: 5, eu: 37 },
+    { uk: 5, us: 6, eu: 38 },
+    { uk: 6, us: 7, eu: 39 },
+    { uk: 7, us: 8, eu: 40 },
+    { uk: 8, us: 9, eu: 41 },
+    { uk: 9, us: 10, eu: 42 },
+    { uk: 10, us: 11, eu: 43 },
+    { uk: 11, us: 12, eu: 44 },
+    { uk: 12, us: 13, eu: 45 }
+];
+
+const questionTree = {
+    "Running & Sports": [
+        {
+            id: "use_case",
+            question: "Where do you run?",
+            subtitle: "Select primary use",
+            options: [
+                { label: "Road Running", value: "Road", icon: "road" },
+                { label: "Trail Running", value: "Trail", icon: "tree" },
+                { label: "Gym / Treadmill", value: "Gym", icon: "dumbbell" },
+                { label: "Race Day", value: "Race", icon: "flag" },
+                { label: "Just Walking", value: "Walking", icon: "footprints" }
+            ]
+        },
+        {
+            id: "cushion",
+            question: "Cushion level?",
+            options: [
+                { label: "Soft & Plush", value: "Soft", icon: "cloud" },
+                { label: "Balanced", value: "Balanced", icon: "scale" },
+                { label: "Firm & Fast", value: "Firm", icon: "zap" }
+            ]
+        },
+        {
+            id: "fit",
+            question: "Fit preference?",
+            options: [
+                { label: "Regular", value: "Standard" },
+                { label: "Wide fit needed", value: "Wide" }
+            ]
+        }
+    ],
+    "Sneakers": [
+        {
+            id: "vibe",
+            question: "What's your vibe?",
+            subtitle: "Define your aesthetic",
+            multi: true,
+            options: [
+                { label: "Retro / Classic", value: "Retro", icon: "archive" },
+                { label: "Minimalist", value: "Minimal", icon: "circle" },
+                { label: "Chunky / Dad", value: "Chunky", icon: "layers" },
+                { label: "Streetwear", value: "Streetwear", icon: "flame" },
+                { label: "Luxury", value: "Luxury", icon: "diamond" }
+            ]
+        },
+        {
+            id: "brand",
+            question: "Favorite Brands?",
+            subtitle: "Select multiple or let us surprise you",
+            multi: true,
+            options: [
+                { label: "Nike", value: "Nike" },
+                { label: "New Balance", value: "New Balance" },
+                { label: "ASICS", value: "ASICS" },
+                { label: "Adidas", value: "Adidas" },
+                { label: "Puma", value: "Puma" },
+                { label: "Onitsuka Tiger", value: "Onitsuka Tiger" },
+                { label: "Converse", value: "Converse" },
+                { label: "Comet", value: "Comet" },
+                { label: "Surprise Me", value: "Surprise me", icon: "gift" }
+            ]
+        },
+        {
+            id: "silhouette",
+            question: "Height?",
+            multi: true,
+            options: [
+                { label: "Low Top", value: "Low" },
+                { label: "Mid Top", value: "Mid" },
+                { label: "High Top", value: "High" }
+            ]
+        },
+        {
+            id: "color_preference",
+            question: "Color preference?",
+            options: [
+                { label: "Neutral (White/Black/Grey)", value: "Neutral" },
+                { label: "Colorful / Bold", value: "Bold" }
+            ]
+        }
+    ],
+    "Casual": [
+        {
+            id: "use_case",
+            question: "Primary use?",
+            options: [
+                { label: "Office / Work", value: "Office", icon: "briefcase" },
+                { label: "College / Campus", value: "College", icon: "graduation" },
+                { label: "Travel", value: "Travel", icon: "plane" },
+                { label: "Daily Beater", value: "Daily", icon: "shoe" }
+            ]
+        },
+        {
+            id: "style",
+            question: "Fastening style?",
+            options: [
+                { label: "Lace-up", value: "Lace-up" },
+                { label: "Slip-on / Loafer", value: "Slip-on" }
+            ]
+        }
+    ],
+    "Formal": [
+        {
+            id: "type_men",
+            question: "Shoe Style",
+            condition: (state) => state.gender === 'men',
+            options: [
+                { label: "Oxford", value: "Oxford" },
+                { label: "Derby", value: "Derby" },
+                { label: "Loafer", value: "Loafer" },
+                { label: "Monk Strap", value: "Monk" }
+            ]
+        },
+        {
+            id: "type_women",
+            question: "Shoe Style",
+            condition: (state) => state.gender === 'women',
+            options: [
+                { label: "Loafer", value: "Loafer" },
+                { label: "Pumps", value: "Pumps" },
+                { label: "Block Heel", value: "Block Heel" },
+                { label: "Formal Flats", value: "Flats" }
+            ]
+        },
+        {
+            id: "use_case",
+            question: "Occasion?",
+            subtitle: "When will you wear them?",
+            options: [
+                { label: "Office / Daily", value: "Office" },
+                { label: "Wedding / Party", value: "Wedding" },
+                { label: "Interview", value: "Interview" }
+            ]
+        }
+    ]
+};
 
 const API_URL = '/api';
 
