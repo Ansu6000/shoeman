@@ -186,7 +186,6 @@ const questionTree = {
     ]
 };
 
-const API_URL = '/api';
 
 // Icons (Lucide Style SVGs) - Retained
 const ICONS = {
@@ -543,6 +542,11 @@ function updateUI() {
 // Search
 // ========================
 
+const API_URL = '/api';
+
+// For standalone mode without Vercel API
+const SERPAPI_KEY = '16fad441d9fe8cf7b5db01ebdc42dd99cf42c05c1d5ec70da366ba4d55786ded';
+
 async function searchShoes() {
     document.querySelectorAll('.quiz-step').forEach(s => s.classList.remove('active'));
     const resultsSection = document.getElementById('results');
@@ -568,22 +572,106 @@ async function searchShoes() {
         attributes: JSON.stringify(selections.attributes)
     });
 
+    console.log("Search attributes:", selections);
+
     try {
-        const res = await fetch(`${API_URL}/search?${params}`);
-        if (!res.ok) throw new Error('Search Failed');
+        let recommendations = [];
+        let useBackend = true;
 
-        const data = await res.json();
+        // Check environment - if clearly client-side only (file:// or github.io), skip backend
+        if (window.location.protocol === 'file:' || window.location.hostname.includes('github.io')) {
+            useBackend = false;
+        }
 
-        if (data.recommendations && data.recommendations.length > 0) {
-            displayResults(data.recommendations);
+        // 1. Try Backend First
+        if (useBackend) {
+            try {
+                // Construct standard URL
+                let fetchUrl = `${API_URL}/search?${params}`;
+
+                // If running locally via simple server, point to python server API route if it existed (it doesn't usually)
+                // But since we are likely on python http.server, /api/search will 404.
+                // So let's force client-side if we are on localhost:8000
+                if (window.location.host === 'localhost:8000') {
+                    throw new Error("Local server detected, using client-side fallback");
+                }
+
+                const res = await fetch(fetchUrl);
+                if (!res.ok) throw new Error('Backend API Failed');
+                const data = await res.json();
+                recommendations = data.recommendations || [];
+            } catch (err) {
+                console.warn("Backend unavailable, attempting client-side fallback...", err);
+                useBackend = false;
+            }
+        }
+
+        // 2. Client-Side Fallback (Direct SerpAPI)
+        if (!useBackend || recommendations.length === 0) {
+            console.log("Running Client-Side Search Logic...");
+
+            // Construct intelligent query
+            const attrs = Object.values(selections.attributes).flat().join(' ');
+            const genderTerm = selections.gender === 'men' ? "Men's" : "Women's";
+            const catTerm = selections.category.name;
+            const sizeTerm = selections.size ? `UK ${selections.size.uk}` : '';
+
+            // Prioritize category and gender
+            const query = `${selections.gender} ${catTerm} shoes ${attrs}`;
+            console.log("Searching Google Shopping for:", query);
+
+            // Fetch from SerpAPI directly
+            const url = `https://serpapi.com/search.json?engine=google_shopping&q=${encodeURIComponent(query)}&api_key=${SERPAPI_KEY}&num=6&gl=in&hl=en&location=India`;
+
+            const resp = await fetch(url);
+            const sData = await resp.json();
+
+            if (sData.error) throw new Error(sData.error);
+
+            recommendations = (sData.shopping_results || []).map(item => ({
+                brand: item.source || item.title.split(' ')[0],
+                model: item.title,
+                price: item.extracted_price || 0,
+                live_price: item.extracted_price,
+                image: item.thumbnail,
+                best_link: item.product_link,
+                source: item.source || "Google Shopping"
+            }));
+        }
+
+        // 3. Last Resort: Local static fallback (if SerpAPI also fails or is blocked)
+        if (recommendations.length === 0) {
+            console.log("No results from API, using last-resort detailed logic");
+            // Since we can't easily inline the massive catalogue, let's just show a user-friendly message
+            // unless we want to fetch data.cjs? No, that's nodejs.
+            // We can fetch data.js, but we refactored it out.
+            // Let's rely on the error message being helpful, or perhaps try one more clever trick?
+            // No, let's stick to the visible error message, but make it very clear.
+        }
+
+        if (recommendations && recommendations.length > 0) {
+            displayResults(recommendations);
         } else {
-            content.innerHTML = `<div class="no-results-state"><h3>No perfect matches.</h3><p>We are expanding our catalog daily.</p><button class="btn btn-primary" onclick="resetApp()">Try Again</button></div>`;
+            content.innerHTML = `<div class="no-results-state"><h3>No perfect matches found.</h3><p>Try adjusting your preferences.</p><button class="btn btn-primary" onclick="resetApp()">Try Again</button></div>`;
         }
     } catch (e) {
-        console.error(e);
-        content.innerHTML = `<div class="no-results-state"><h3>Network Error</h3><p>Ensure server is running.</p><button class="btn btn-primary" onclick="resetApp()">Retry</button></div>`;
+        console.error("Search Error details:", e);
+
+        let msg = "We couldn't connect to the shoe network.";
+        if (e.message.includes('Failed to fetch')) {
+            msg = "Connection blocked. If using an AdBlocker, please pause it, or try a different browser. (CORS Policy)";
+        }
+
+        content.innerHTML = `
+            <div class="no-results-state">
+                <h3>Connection Issue</h3>
+                <p>${msg}</p>
+                <p class="error-detail">${e.message}</p>
+                <button class="btn btn-primary" onclick="resetApp()">Retry</button>
+            </div>`;
     }
 }
+
 
 // Brand-based fallback images (high quality, reliable Unsplash URLs)
 const BRAND_IMAGES = {
