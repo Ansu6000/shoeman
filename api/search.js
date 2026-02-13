@@ -1,4 +1,4 @@
-const { shoeCatalog, priceRanges } = require('./data.js');
+const { shoeCatalog, priceRanges } = require('../lib/data.js');
 
 const SERPAPI_KEY = process.env.SERPAPI_KEY || '16fad441d9fe8cf7b5db01ebdc42dd99cf42c05c1d5ec70da366ba4d55786ded';
 
@@ -16,7 +16,11 @@ module.exports = async (req, res) => {
         const { category, gender, budgetTier, size, attributes } = req.query;
         if (!category && !gender) return res.status(200).json({ status: "alive" });
 
-        const attrObj = attributes ? JSON.parse(attributes) : {};
+        let attrObj = {};
+        try {
+            attrObj = attributes ? JSON.parse(attributes) : {};
+        } catch (e) { /* ignore parse error */ }
+
         const budgetRange = priceRanges.find(r => r.id === budgetTier);
         const targetGender = gender?.toLowerCase().trim();
         const targetCategory = category?.toLowerCase().trim();
