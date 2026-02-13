@@ -1,7 +1,7 @@
 {
   "name": "shoeman",
   "version": "1.0.0",
-  "scripts": {
+  "scripts": { "start": "echo skipping start",
     "build": "echo 'No build step'"
   },
   "dependencies": {
