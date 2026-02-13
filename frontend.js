@@ -585,23 +585,25 @@ async function searchShoes() {
 
         // 1. Try Backend First
         if (useBackend) {
+            // Always use backend on Vercel
+            // If testing locally, point to production backend to avoid Python server 404
+            if (window.location.host.includes('localhost') || window.location.protocol === 'file:') {
+                // For local testing, hit PROD backend (Subject to CORS, but we enabled it!)
+                fetchUrl = `https://shoeman.vercel.app/api/search?${params}`;
+            } else {
+                // On prod, relative path is fine
+                fetchUrl = `/api/search?${params}`;
+            }
+
+            console.log("Fetching URL:", fetchUrl);
+
             try {
-                // Construct standard URL
-                let fetchUrl = `${API_URL}/search?${params}`;
-
-                // If running locally via simple server, point to python server API route if it existed (it doesn't usually)
-                // But since we are likely on python http.server, /api/search will 404.
-                // So let's force client-side if we are on localhost:8000
-                if (window.location.host === 'localhost:8000') {
-                    throw new Error("Local server detected, using client-side fallback");
-                }
-
                 const res = await fetch(fetchUrl);
-                if (!res.ok) throw new Error('Backend API Failed');
+                if (!res.ok) throw new Error(`Backend API Failed ${res.status}`);
                 const data = await res.json();
                 recommendations = data.recommendations || [];
             } catch (err) {
-                console.warn("Backend unavailable, attempting client-side fallback...", err);
+                console.warn("Backend unavailable:", err);
                 useBackend = false;
             }
         }
