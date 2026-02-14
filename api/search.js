@@ -33,10 +33,9 @@ const shoeCatalog = [
     }
 ];
 
-// Use CommonJS export for stability
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
     // 1. Handle CORS immediately
-    res.setHeader('Access-Control-Allow-Credentials', true);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
     res.setHeader(
@@ -45,25 +44,23 @@ module.exports = async (req, res) => {
     );
 
     if (req.method === 'OPTIONS') {
-        return res.status(200).end();
+        res.status(200).end();
+        return;
     }
 
     try {
+        // In Vercel, query is available on req.query
         const { category, gender, budgetTier, size, attributes } = req.query;
 
         // 2. Filter Local Catalog (Minimal Match)
         const candidates = shoeCatalog.filter(shoe => {
             if (gender && !shoe.gender.some(g => g.toLowerCase() === gender.toLowerCase())) return false;
             return true;
-        }).slice(0, 5); // Take top 5 basic matches
+        }).slice(0, 5);
 
         // 3. ENHANCE with Live Data (SerpAPI)
-        // We will search for exactly what the user asked for, using the local matches mainly as query templates
-        // or just constructing a raw smart query.
-
         const targetGender = gender === 'men' ? "Men's" : "Women's";
         const targetCategory = category || "Shoes";
-        // Construct a specific query for SerpAPI
         const searchQuery = `${targetGender} ${targetCategory} shoes ${size ? 'Size UK ' + size : ''}`;
 
         console.log("Fetching SerpAPI:", searchQuery);
@@ -85,21 +82,20 @@ module.exports = async (req, res) => {
 
         if (data.error) {
             console.error("SerpAPI Error:", data.error);
-            // Fallback to local candidates if API fails but we don't crash
-            return res.status(200).json({
+            res.status(200).json({
                 recommendations: candidates.map(c => ({
                     brand: c.brand,
                     model: c.model,
                     price: c.min_price,
                     live_price: c.min_price,
-                    image: '', // Needs a fallback image
+                    image: '',
                     best_link: 'https://google.com',
                     source: 'Local Catalog Fallback'
                 }))
             });
+            return;
         }
 
-        // Transform SerpAPI results
         const results = (data.shopping_results || []).map(item => ({
             brand: item.source || item.title.split(' ')[0],
             model: item.title,
