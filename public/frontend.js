@@ -589,10 +589,10 @@ async function searchShoes() {
             // If testing locally, point to production backend to avoid Python server 404
             if (window.location.host.includes('localhost') || window.location.protocol === 'file:') {
                 // For local testing, hit PROD backend (Subject to CORS, but we enabled it!)
-                fetchUrl = `https://shoeman.vercel.app/api/search?${params}`;
+                fetchUrl = `https://shoeman.vercel.app/api/reco?${params}`;
             } else {
                 // On prod, relative path is fine
-                fetchUrl = `/api/search?${params}`;
+                fetchUrl = `/api/reco?${params}`;
             }
 
             console.log("Fetching URL:", fetchUrl);
