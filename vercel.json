@@ -1,0 +1,23 @@
+{
+    "version": 2,
+    "builds": [
+        {
+            "src": "api/reco.js",
+            "use": "@vercel/node"
+        },
+        {
+            "src": "{index.html,search.html,styles.css,frontend.js,questions.js,*.png}",
+            "use": "@vercel/static"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/api/reco",
+            "dest": "/api/reco.js"
+        },
+        {
+            "src": "/(.*)",
+            "dest": "/$1"
+        }
+    ]
+}
