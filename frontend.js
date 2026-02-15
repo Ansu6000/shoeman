@@ -613,17 +613,32 @@ async function searchShoes() {
             console.log("Running Client-Side Search Logic...");
 
             // Construct intelligent query
-            const attrs = Object.values(selections.attributes).flat().join(' ');
             const genderTerm = selections.gender === 'men' ? "Men's" : "Women's";
-            const catTerm = selections.category.name;
-            const sizeTerm = selections.size ? `UK ${selections.size.uk}` : '';
+            const category = selections.category.id;
+
+            const categoryOptimizers = {
+                "Sneakers": "lifestyle sneakers street style casual -running -performance -sports -marathon",
+                "Running & Sports": "performance running sports shoes marathon training -casual -formal",
+                "Casual": "casual daily wear comfort shoes -formal -sports -running",
+                "Formal": "formal dress shoes oxford derby loafer -sneaker -running -sports"
+            };
+            const optimizationKw = categoryOptimizers[category] || category || "Shoes";
+
+            let selectedBrands = selections.attributes.brand || [];
+            const isSurpriseMe = selectedBrands.includes("Surprise me");
+            const attrs = Object.values(selections.attributes).flat().filter(a => a !== "Surprise me").join(' ');
+
+            let brandQuery = (!isSurpriseMe && selectedBrands.length > 0) ? selectedBrands.join(' ') : '';
+            if (category === "Sneakers" && (isSurpriseMe || selectedBrands.length === 0)) {
+                brandQuery = "popular trending lifestyle";
+            }
 
             // Prioritize category and gender
-            const query = `${selections.gender} ${catTerm} shoes ${attrs}`;
+            const query = `${genderTerm} ${brandQuery} ${optimizationKw} ${attrs}`.replace(/\s+/g, ' ').trim();
             console.log("Searching Google Shopping for:", query);
 
             // Fetch from SerpAPI directly
-            const url = `https://serpapi.com/search.json?engine=google_shopping&q=${encodeURIComponent(query)}&api_key=${SERPAPI_KEY}&num=6&gl=in&hl=en&location=India`;
+            const url = `https://serpapi.com/search.json?engine=google_shopping&q=${encodeURIComponent(query)}&api_key=${SERPAPI_KEY}&num=20&gl=in&hl=en&location=India`;
 
             const resp = await fetch(url);
             const sData = await resp.json();
@@ -643,8 +658,6 @@ async function searchShoes() {
             // Filter by Price and Brand
             const minP = selections.budget?.min || 0;
             const maxP = selections.budget?.max || 1000000;
-            const selectedBrands = selections.attributes.brand || [];
-            const isSurpriseMe = selectedBrands.includes("Surprise me");
 
             recommendations = rawResults.filter(item => {
                 // Price Filter
@@ -659,7 +672,20 @@ async function searchShoes() {
                     );
                 }
 
-                return priceMatch && brandMatch;
+                // Category Match
+                let categoryMatch = true;
+                const category = selections.category.id;
+                if (category === "Sneakers") {
+                    const isPerformance = ["running", "marathon", "training", "performance", "sprint"].some(kw =>
+                        item.model.toLowerCase().includes(kw)
+                    );
+                    const isLifestyle = ["sneaker", "casual", "retro", "lifestyle"].some(kw =>
+                        item.model.toLowerCase().includes(kw)
+                    );
+                    if (isPerformance && !isLifestyle) categoryMatch = false;
+                }
+
+                return priceMatch && brandMatch && categoryMatch;
             });
 
             // If we have too few results, loosen the price constraint slightly

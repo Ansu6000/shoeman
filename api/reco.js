@@ -70,11 +70,25 @@ export default async function handler(req, res) {
 
         // 3. ENHANCE with Live Data (SerpAPI)
         const targetGender = gender === 'men' ? "Men's" : "Women's";
-        const targetCategory = category || "Shoes";
+
+        // Category Optimization Map
+        const categoryOptimizers = {
+            "Sneakers": "lifestyle sneakers street style casual -running -performance -sports -marathon",
+            "Running & Sports": "performance running sports shoes marathon training -casual -formal",
+            "Casual": "casual daily wear comfort shoes -formal -sports -running",
+            "Formal": "formal dress shoes oxford derby loafer -sneaker -running -sports"
+        };
+        const optimizationKw = categoryOptimizers[category] || category || "Shoes";
 
         // Include brands in search query if selected and not surprise me
-        const brandQuery = (!isSurpriseMe && selectedBrands.length > 0) ? selectedBrands.join(' ') : '';
-        const searchQuery = `${targetGender} ${brandQuery} ${targetCategory} shoes ${size ? 'Size UK ' + size : ''}`.replace(/\s+/g, ' ').trim();
+        let brandQuery = (!isSurpriseMe && selectedBrands.length > 0) ? selectedBrands.join(' ') : '';
+
+        // Boost for Sneakers if "Surprise me" or broad search
+        if (category === "Sneakers" && (isSurpriseMe || selectedBrands.length === 0)) {
+            brandQuery = "popular trending lifestyle"; // Force popular results
+        }
+
+        const searchQuery = `${targetGender} ${brandQuery} ${optimizationKw} ${size ? 'Size UK ' + size : ''}`.replace(/\s+/g, ' ').trim();
 
         console.log("Fetching SerpAPI:", searchQuery, "Price Range:", minPrice, "-", maxPrice);
 
@@ -132,7 +146,20 @@ export default async function handler(req, res) {
                     );
                 }
 
-                return priceMatch && brandMatch;
+                // Category Match (Strictness)
+                let categoryMatch = true;
+                if (category === "Sneakers") {
+                    const isPerformance = ["running", "marathon", "training", "performance", "sprint"].some(kw =>
+                        item.model.toLowerCase().includes(kw)
+                    );
+                    // Exceptions for "Retro Running" or "Running Sneaker" which are lifestyle
+                    const isLifestyle = ["sneaker", "casual", "retro", "lifestyle"].some(kw =>
+                        item.model.toLowerCase().includes(kw)
+                    );
+                    if (isPerformance && !isLifestyle) categoryMatch = false;
+                }
+
+                return priceMatch && brandMatch && categoryMatch;
             });
 
             // If we have too few results, loosen the price constraint slightly before giving up
