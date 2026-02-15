@@ -704,10 +704,48 @@ async function searchShoes() {
                 recommendations = [...recommendations, ...supplementary];
             }
 
-            // Final Sort and Slice
+            // DIVERSITY & DE-DUPLICATION LOGIC
             const midPrice = (minP + maxP) / 2;
+            const brandGroups = {};
+            const seenModels = new Set();
+
+            // Sort by midPrice first
             recommendations.sort((a, b) => Math.abs(a.price - midPrice) - Math.abs(b.price - midPrice));
-            recommendations = recommendations.slice(0, 5);
+
+            recommendations.forEach(item => {
+                const modelKey = item.model.toLowerCase().slice(0, 15);
+                if (seenModels.has(modelKey)) return;
+
+                if (!brandGroups[item.brand]) brandGroups[item.brand] = [];
+                brandGroups[item.brand].push(item);
+                seenModels.add(modelKey);
+            });
+
+            let finalRecs = [];
+            let brands = Object.keys(brandGroups);
+            brands.sort(() => Math.random() - 0.5); // Randomize brands
+
+            // Pass 1: One from each available brand
+            for (const b of brands) {
+                if (finalRecs.length >= 5) break;
+                const top = brandGroups[b].shift();
+                if (top) finalRecs.push(top);
+            }
+
+            // Pass 2: Fill remains
+            while (finalRecs.length < 5) {
+                let added = false;
+                for (const b of brands) {
+                    if (finalRecs.length >= 5) break;
+                    const next = brandGroups[b].shift();
+                    if (next) {
+                        finalRecs.push(next);
+                        added = true;
+                    }
+                }
+                if (!added) break;
+            }
+            recommendations = finalRecs.slice(0, 5);
         }
 
         // 3. Last Resort: Local static fallback (if SerpAPI also fails or is blocked)

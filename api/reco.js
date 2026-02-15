@@ -180,12 +180,54 @@ export default async function handler(req, res) {
             }
         }
 
-        // Final Sort and Slice
-        // Sort by price proximity to the middle of range
+        // DIVERSITY & DE-DUPLICATION LOGIC
+        // 1. Sort results by price proximity to the midPrice initially
         const midPrice = (minPrice + maxPrice) / 2;
         finalResults.sort((a, b) => Math.abs(a.price - midPrice) - Math.abs(b.price - midPrice));
 
-        res.status(200).json({ recommendations: finalResults.slice(0, 5) });
+        // 2. Group by Brand and De-duplicate Models
+        const brandGroups = {};
+        const seenModels = new Set();
+
+        finalResults.forEach(item => {
+            // Very basic model de-duplication (first 15 chars often capture the base model)
+            const modelKey = item.model.toLowerCase().slice(0, 15);
+            if (seenModels.has(modelKey)) return;
+
+            if (!brandGroups[item.brand]) brandGroups[item.brand] = [];
+            brandGroups[item.brand].push(item);
+            seenModels.add(modelKey);
+        });
+
+        // 3. Selection Strategy: Round-Robin Brand Selection
+        let recommendations = [];
+        let brands = Object.keys(brandGroups);
+
+        // Shuffle brands to randomize which ones get picked if we have > 5
+        brands.sort(() => Math.random() - 0.5);
+
+        // First pass: Pick one best match from each brand in the shuffled list
+        for (const b of brands) {
+            if (recommendations.length >= 5) break;
+            const topChoice = brandGroups[b].shift();
+            if (topChoice) recommendations.push(topChoice);
+        }
+
+        // Second pass: If we still have slots, fill from remaining items across all brands
+        while (recommendations.length < 5) {
+            let itemAdded = false;
+            for (const b of brands) {
+                if (recommendations.length >= 5) break;
+                const nextChoice = brandGroups[b].shift();
+                if (nextChoice) {
+                    recommendations.push(nextChoice);
+                    itemAdded = true;
+                }
+            }
+            if (!itemAdded) break; // No more items left
+        }
+
+        res.status(200).json({ recommendations: recommendations.slice(0, 5) });
 
     } catch (e) {
         console.error("Critical API Error:", e);
