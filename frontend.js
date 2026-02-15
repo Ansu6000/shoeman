@@ -644,15 +644,23 @@ async function searchShoes() {
 
             if (sData.error) throw new Error(sData.error);
 
-            const rawResults = (sData.shopping_results || []).map(item => ({
-                brand: item.source || item.title.split(' ')[0],
-                model: item.title,
-                price: item.extracted_price || 0,
-                live_price: item.extracted_price,
-                image: item.thumbnail,
-                best_link: item.product_link,
-                source: item.source || "Google Shopping"
-            }));
+            const commonBrands = ["Nike", "Adidas", "Puma", "New Balance", "Asics", "Brooks", "Skechers", "Reebok", "Converse", "Vans", "Fila", "Crocs", "Skechers", "Bata", "Woodland", "Red Chief", "Red Tape", "Liberty", "Campus", "Sparx"];
+            const allPossibleBrands = [...new Set([...selectedBrands, ...commonBrands])];
+
+            const rawResults = (sData.shopping_results || []).map(item => {
+                const title = item.title.toLowerCase();
+                let detectedBrand = allPossibleBrands.find(b => title.includes(b.toLowerCase())) || item.title.split(' ')[0];
+
+                return {
+                    brand: detectedBrand, // Correctly group by brand
+                    model: item.title,
+                    price: item.extracted_price || 0,
+                    live_price: item.extracted_price,
+                    image: item.thumbnail,
+                    best_link: item.product_link,
+                    source: item.source || "Google Shopping"
+                };
+            });
 
             // Filter by Price and Brand
             recommendations = rawResults.filter(item => {
