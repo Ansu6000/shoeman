@@ -1,136 +1,81 @@
-# Shoeman®
+# Shoeman® — Intelligent Footwear Discovery Engine
 
-Find your perfect pair in 30 seconds.
+Shoeman is a high-performance recommendation engine designed to eliminate choice paralysis in the digital footwear marketplace. By leveraging a multi-signal scoring algorithm and live market data via SerpAPI, Shoeman delivers exactly five precision-matched recommendations tailored to specific user profiles, budgets, and technical requirements.
 
-A shoe recommendation engine that understands your style, budget, and size — then finds real products from trusted Indian retailers like Myntra, Amazon, Flipkart, and Ajio.
+## Product Vision
 
----
+The modern e-commerce experience is plagued by over-abundance. A typical search for "running shoes" returns thousands of results across multiple retailers, often ignoring the user's specific biomechanical needs or actual budget constraints. 
 
-## What It Does
+Shoeman solves this by shifting from **search** to **discovery**. Instead of filtering through noise, users engage with a 30-second diagnostic questionnaire that generates a curated "Perfect Pair" shortlist.
 
-Instead of scrolling through thousands of listings across shopping sites, you answer 5 quick questions. Shoeman searches a catalog of 5,430 shoes from 26 brands, scores them against your preferences, and returns exactly **5 recommendations** with real photos, live prices, and direct purchase links.
+## Core Capabilities
 
-No accounts. No tracking. Just shoes.
+### 1. Multi-Signal Scoring Algorithm
+Every recommendation is the result of a scoring matrix that evaluates:
+- **Profile Alignment**: Mandatory filters for gender, category, and UK sizing.
+- **Budget Integrity**: Strict price-matching logic with a controlled ±20% tolerance to capture market deals while respecting user constraints.
+- **Brand Diversity Layer**: A round-robin selection strategy that ensures a variety of manufacturers are represented in every result set.
+- **Technical Attributes**: Context-aware scoring for running gait (cushion), aesthetic vibe (silhouette), and utility (use case).
 
----
+### 2. Live Market Enrichment
+Shoeman does not rely on static, outdated pricing. It performs real-time queries against Google Shopping (India) to provide:
+- **Live Pricing**: Accurate costs from major Indian retailers (Amazon, Myntra, Flipkart, Ajio).
+- **Stock Validation**: High-fidelity product links and current availability.
+- **Retailer Whitelisting**: Automatic exclusion of unverified third-party resellers to ensure product authenticity.
 
-## How It Works
-
-1. **Take the quiz** — Gender → Category → Preferences → Size → Budget
-2. **Scoring engine runs** — Matches your answers against 5,430 shoes across brand, style, price, use case, and more
-3. **Live enrichment** — Fetches real product images and prices from Google Shopping via SerpAPI
-4. **Trusted sources only** — Only shows results from Myntra, Amazon, Flipkart, Ajio, Nykaa, Tata CLiQ, and official brand sites. No random resellers.
-
----
-
-## Quick Start
-
-**Prerequisites:** Node.js 18+, a SerpAPI key ([get one here](https://serpapi.com), free tier gives 100 searches/month)
-
-```bash
-git clone https://github.com/your-username/shoeman.git
-cd shoeman
-npm install
-echo "SERPAPI_KEY=your_key_here" > .env
-npm start
-```
-
-Open http://localhost:3000
+### 3. Progressive Disclosure Architecture
+The UI is built on a minimalist "Palmer" design system, focusing on visual clarity and reducing cognitive load through a step-by-step progressive disclosure questionnaire.
 
 ---
 
-## Project Structure
+## Technical Stack
 
-```
-shoeman/
-├── index.html            Homepage
-├── search.html           Quiz interface
-├── styles.css            Design system and all styling
-├── app.js                Frontend logic — quiz flow, API calls, rendering
-├── questions.js           Dynamic question trees per category
-├── data.js               Categories, price ranges, size options
-├── server.js             Express API, scoring engine, SerpAPI integration
-├── data.cjs              Shoe catalog (5,430 entries)
-├── generate_catalog.js   Script that generates the catalog
-├── .env                  SerpAPI key (not committed)
-└── package.json
-```
+- **Frontend**: Vanilla JavaScript (ES6+), Semantic HTML5, CSS3 (Custom Design System).
+- **Backend**: Node.js / Express (Vercel Serverless Architecture).
+- **Data Enrichment**: SerpAPI (Google Shopping Engine Integration).
+- **Logic**: Custom Round-Robin Diversity Algorithm & Model De-duplication.
 
 ---
 
-## Features
+## Deployment and Setup
 
-- **Adaptive questions** — Running shoes ask about cushion and terrain. Sneakers ask about vibe and silhouette. Formals ask about occasion.
-- **5,430 shoes, 26 brands** — Nike, Adidas, ASICS, New Balance, Hoka, Puma, Vans, Converse, Skechers, Clarks, Timberland, and more.
-- **Live prices** — Real market prices fetched from actual retailers, not estimated data.
-- **Size-aware** — Your selected UK size is included in the product search.
-- **Budget filtering** — Results stay within your chosen range. Tolerance of ±20% to catch deals.
-- **Retailer whitelist** — Only Myntra, Amazon, Flipkart, Ajio, Nykaa, Tata CLiQ, and official brand sites. Everything else is rejected.
-- **Caching** — SerpAPI results cached in memory so repeated queries are instant.
+### Local Development
+1. Clone the repository: `git clone https://github.com/Ansu6000/shoeman.git`
+2. Install dependencies: `npm install`
+3. Configure Environment: Create a `.env` file in the root directory.
+   ```
+   SERPAPI_KEY=your_production_key_here
+   ```
+4. Execute: `npm start`
 
----
-
-## How Scoring Works
-
-Each shoe is scored across multiple signals:
-
-- **Category + Gender** — hard filters, must match
-- **Budget** — hard filter on price range, +3 bonus for exact tier match
-- **Brand preference** — +5 for each brand the user selected
-- **Vibe/Style** — +3 per match (Streetwear, Retro, Minimal, etc.)
-- **Use case** — +2 per match (Road, Trail, Office, etc.)
-- **Silhouette** — +3 per match (Low, Mid, High top)
-- **Color** — +2 for matching preference
-- **Cushion level** — +3 for matching preference
-- **Popularity + Trending** — built-in scores from catalog data
-
-Top 5 win. After scoring, each shoe is enriched with live data from Google Shopping.
+### Production
+The engine is optimized for deployment on Vercel. Continuous Integration handles the building of serverless functions within the `api/` directory.
 
 ---
 
-## Categories
+## API Documentation
 
-**Running & Sports** — Where do you run? Cushion level? Fit preference?
+### Recommendation Endpoint
+`GET /api/reco`
 
-**Sneakers** — What's your vibe? Favorite brands? Height? Color preference?
+**Parameters:**
+- `category`: [Sneakers | Running & Sports | Casual | Formal]
+- `gender`: [men | women]
+- `budgetTier`: [2k-5k | 5k-7k | 7k-10k | 10k-15k | 15k+]
+- `size`: UK Shoe Size (Numeric)
+- `attributes`: Stringified JSON of secondary preferences (brands, vibe, etc.)
 
-**Casual** — Primary use? Fastening style?
-
-**Formal** — Shoe style (gender-specific)? Occasion?
-
----
-
-## API
-
-### GET /api/search
-
-Query params: `category`, `gender`, `budgetTier`, `size`, `attributes` (JSON string)
-
-Returns 5 recommendations, each with: brand, model, live price, product image, purchase link, retailer source, and a short explanation of why it was recommended.
+**Response Schema:**
+Returns a JSON object containing an array of 5 `recommendations`. Each item includes brand name, model title, extracted price, high-resolution thumbnail, and a direct-to-retailer product link.
 
 ---
 
-## Tech Stack
+## Product Roadmap
 
-- Frontend: HTML, CSS, vanilla JavaScript
-- Backend: Node.js, Express
-- Data enrichment: SerpAPI (Google Shopping)
-- No frameworks, no build step
-
----
-
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `SERPAPI_KEY` | SerpAPI key for Google Shopping queries |
+- **Phase 2.0**: Implementation of user feedback loops to refine the scoring weights.
+- **Phase 2.1**: Expansion of the retailer whitelist to include niche boutique sneaker stores in India.
+- **Phase 3.0**: Migration of the core scoring engine to a vector-based similarity search (RAG) for deeper attribute matching.
 
 ---
 
-## License
-
-MIT
-
----
-
-Built for sneaker lovers in India.
+© 2026 Shoeman®. Built for precision discovery.
