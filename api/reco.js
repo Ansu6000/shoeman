@@ -50,26 +50,39 @@ export default async function handler(req, res) {
 
     try {
         // In Vercel, query is available on req.query
-        const { category, gender, budgetTier, size, attributes } = req.query;
+        const { category, gender, budgetTier, size, attributes: attributesRaw } = req.query;
+        const attributes = attributesRaw ? JSON.parse(attributesRaw) : {};
+        const selectedBrands = attributes.brand || [];
+        const isSurpriseMe = selectedBrands.includes("Surprise me");
 
-        // 2. Filter Local Catalog (Minimal Match)
+        // 1. Get Price Range
+        const tier = priceRanges.find(t => t.id === budgetTier) || { min: 0, max: 1000000 };
+        const minPrice = tier.min;
+        const maxPrice = tier.max;
+
+        // 2. Filter Local Catalog (Minimal Match) as fallback candidates
         const candidates = shoeCatalog.filter(shoe => {
             if (gender && !shoe.gender.some(g => g.toLowerCase() === gender.toLowerCase())) return false;
+            // Basic price check for catalog
+            if (shoe.min_price > maxPrice || shoe.max_price < minPrice) return false;
             return true;
-        }).slice(0, 5);
+        });
 
         // 3. ENHANCE with Live Data (SerpAPI)
         const targetGender = gender === 'men' ? "Men's" : "Women's";
         const targetCategory = category || "Shoes";
-        const searchQuery = `${targetGender} ${targetCategory} shoes ${size ? 'Size UK ' + size : ''}`;
 
-        console.log("Fetching SerpAPI:", searchQuery);
+        // Include brands in search query if selected and not surprise me
+        const brandQuery = (!isSurpriseMe && selectedBrands.length > 0) ? selectedBrands.join(' ') : '';
+        const searchQuery = `${targetGender} ${brandQuery} ${targetCategory} shoes ${size ? 'Size UK ' + size : ''}`.replace(/\s+/g, ' ').trim();
+
+        console.log("Fetching SerpAPI:", searchQuery, "Price Range:", minPrice, "-", maxPrice);
 
         const usp = new URLSearchParams({
             engine: "google_shopping",
             q: searchQuery,
             api_key: SERPAPI_KEY,
-            num: "5",
+            num: "20", // Request more to allow filtering
             gl: "in",
             hl: "en",
             location: "India"
@@ -80,33 +93,72 @@ export default async function handler(req, res) {
         const resp = await fetch(serpUrl);
         const data = await resp.json();
 
+        let finalResults = [];
+
         if (data.error) {
             console.error("SerpAPI Error:", data.error);
-            res.status(200).json({
-                recommendations: candidates.map(c => ({
-                    brand: c.brand,
-                    model: c.model,
-                    price: c.min_price,
-                    live_price: c.min_price,
-                    image: '',
-                    best_link: 'https://google.com',
-                    source: 'Local Catalog Fallback'
-                }))
+            finalResults = candidates.map(c => ({
+                brand: c.brand,
+                model: c.model,
+                price: c.min_price,
+                live_price: c.min_price,
+                image: '',
+                best_link: 'https://google.com',
+                why_recommended: 'Top match in catalog',
+                source: 'Local Catalog Fallback'
+            }));
+        } else {
+            const rawResults = (data.shopping_results || []).map(item => ({
+                brand: item.source || item.title.split(' ')[0],
+                model: item.title,
+                price: item.extracted_price || 0,
+                live_price: item.extracted_price,
+                image: item.thumbnail,
+                best_link: item.product_link,
+                source: item.source || "Google Shopping"
+            }));
+
+            // Filter by Price and Brand
+            finalResults = rawResults.filter(item => {
+                // Price Filter
+                const priceMatch = item.price >= (minPrice * 0.8) && item.price <= (maxPrice * 1.2); // Allow 20% wiggle room
+
+                // Brand Filter
+                let brandMatch = true;
+                if (!isSurpriseMe && selectedBrands.length > 0) {
+                    brandMatch = selectedBrands.some(b =>
+                        item.model.toLowerCase().includes(b.toLowerCase()) ||
+                        item.brand.toLowerCase().includes(b.toLowerCase())
+                    );
+                }
+
+                return priceMatch && brandMatch;
             });
-            return;
+
+            // If we have too few results, loosen the price constraint slightly before giving up
+            if (finalResults.length < 3) {
+                const supplementary = rawResults.filter(item => {
+                    if (finalResults.find(f => f.model === item.model)) return false;
+
+                    let brandMatch = true;
+                    if (!isSurpriseMe && selectedBrands.length > 0) {
+                        brandMatch = selectedBrands.some(b =>
+                            item.model.toLowerCase().includes(b.toLowerCase()) ||
+                            item.brand.toLowerCase().includes(b.toLowerCase())
+                        );
+                    }
+                    return brandMatch; // Just brand match if price is hard to find
+                });
+                finalResults = [...finalResults, ...supplementary].slice(0, 10);
+            }
         }
 
-        const results = (data.shopping_results || []).map(item => ({
-            brand: item.source || item.title.split(' ')[0],
-            model: item.title,
-            price: item.extracted_price || 0,
-            live_price: item.extracted_price,
-            image: item.thumbnail,
-            best_link: item.product_link,
-            source: item.source || "Google Shopping"
-        }));
+        // Final Sort and Slice
+        // Sort by price proximity to the middle of range
+        const midPrice = (minPrice + maxPrice) / 2;
+        finalResults.sort((a, b) => Math.abs(a.price - midPrice) - Math.abs(b.price - midPrice));
 
-        res.status(200).json({ recommendations: results });
+        res.status(200).json({ recommendations: finalResults.slice(0, 5) });
 
     } catch (e) {
         console.error("Critical API Error:", e);

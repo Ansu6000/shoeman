@@ -630,7 +630,7 @@ async function searchShoes() {
 
             if (sData.error) throw new Error(sData.error);
 
-            recommendations = (sData.shopping_results || []).map(item => ({
+            const rawResults = (sData.shopping_results || []).map(item => ({
                 brand: item.source || item.title.split(' ')[0],
                 model: item.title,
                 price: item.extracted_price || 0,
@@ -639,6 +639,49 @@ async function searchShoes() {
                 best_link: item.product_link,
                 source: item.source || "Google Shopping"
             }));
+
+            // Filter by Price and Brand
+            const minP = selections.budget?.min || 0;
+            const maxP = selections.budget?.max || 1000000;
+            const selectedBrands = selections.attributes.brand || [];
+            const isSurpriseMe = selectedBrands.includes("Surprise me");
+
+            recommendations = rawResults.filter(item => {
+                // Price Filter
+                const priceMatch = item.price >= (minP * 0.8) && item.price <= (maxP * 1.2);
+
+                // Brand Filter
+                let brandMatch = true;
+                if (!isSurpriseMe && selectedBrands.length > 0) {
+                    brandMatch = selectedBrands.some(b =>
+                        item.model.toLowerCase().includes(b.toLowerCase()) ||
+                        item.brand.toLowerCase().includes(b.toLowerCase())
+                    );
+                }
+
+                return priceMatch && brandMatch;
+            });
+
+            // If we have too few results, loosen the price constraint slightly
+            if (recommendations.length < 3) {
+                const supplementary = rawResults.filter(item => {
+                    if (recommendations.find(f => f.model === item.model)) return false;
+                    let brandMatch = true;
+                    if (!isSurpriseMe && selectedBrands.length > 0) {
+                        brandMatch = selectedBrands.some(b =>
+                            item.model.toLowerCase().includes(b.toLowerCase()) ||
+                            item.brand.toLowerCase().includes(b.toLowerCase())
+                        );
+                    }
+                    return brandMatch;
+                });
+                recommendations = [...recommendations, ...supplementary];
+            }
+
+            // Final Sort and Slice
+            const midPrice = (minP + maxP) / 2;
+            recommendations.sort((a, b) => Math.abs(a.price - midPrice) - Math.abs(b.price - midPrice));
+            recommendations = recommendations.slice(0, 5);
         }
 
         // 3. Last Resort: Local static fallback (if SerpAPI also fails or is blocked)
