@@ -574,24 +574,23 @@ async function searchShoes() {
 
     console.log("Search attributes:", selections);
 
+    const minP = selections.budget?.min || 0;
+    const maxP = selections.budget?.max || 1000000;
+    const midP = (minP + maxP) / 2;
+
     try {
         let recommendations = [];
         let useBackend = true;
 
-        // Check environment - if clearly client-side only (file:// or github.io), skip backend
         if (window.location.protocol === 'file:' || window.location.hostname.includes('github.io')) {
             useBackend = false;
         }
 
-        // 1. Try Backend First
         if (useBackend) {
-            // Always use backend on Vercel
-            // If testing locally, point to production backend to avoid Python server 404
+            let fetchUrl = '';
             if (window.location.host.includes('localhost') || window.location.protocol === 'file:') {
-                // For local testing, hit PROD backend (Subject to CORS, but we enabled it!)
                 fetchUrl = `https://shoeman.vercel.app/api/reco?${params}`;
             } else {
-                // On prod, relative path is fine
                 fetchUrl = `/api/reco?${params}`;
             }
 
@@ -638,7 +637,7 @@ async function searchShoes() {
             console.log("Searching Google Shopping for:", query);
 
             // Fetch from SerpAPI directly
-            const url = `https://serpapi.com/search.json?engine=google_shopping&q=${encodeURIComponent(query)}&api_key=${SERPAPI_KEY}&num=20&gl=in&hl=en&location=India`;
+            const url = `https://serpapi.com/search.json?engine=google_shopping&q=${encodeURIComponent(query)}&api_key=${SERPAPI_KEY}&num=40&gl=in&hl=en&location=India&tbs=${encodeURIComponent(`mr:1,price:1,ppr_min:${minP},ppr_max:${maxP}`)}`;
 
             const resp = await fetch(url);
             const sData = await resp.json();
@@ -656,9 +655,6 @@ async function searchShoes() {
             }));
 
             // Filter by Price and Brand
-            const minP = selections.budget?.min || 0;
-            const maxP = selections.budget?.max || 1000000;
-
             recommendations = rawResults.filter(item => {
                 // Price Filter
                 const priceMatch = item.price >= (minP * 0.8) && item.price <= (maxP * 1.2);
@@ -687,35 +683,16 @@ async function searchShoes() {
 
                 return priceMatch && brandMatch && categoryMatch;
             });
-
-            // If we have too few results, loosen the price constraint slightly
-            if (recommendations.length < 3) {
-                const supplementary = rawResults.filter(item => {
-                    if (recommendations.find(f => f.model === item.model)) return false;
-                    let brandMatch = true;
-                    if (!isSurpriseMe && selectedBrands.length > 0) {
-                        brandMatch = selectedBrands.some(b =>
-                            item.model.toLowerCase().includes(b.toLowerCase()) ||
-                            item.brand.toLowerCase().includes(b.toLowerCase())
-                        );
-                    }
-                    return brandMatch;
-                });
-                recommendations = [...recommendations, ...supplementary];
-            }
-
+        }
+        if (recommendations && recommendations.length > 0) {
             // DIVERSITY & DE-DUPLICATION LOGIC
-            const midPrice = (minP + maxP) / 2;
             const brandGroups = {};
             const seenModels = new Set();
-
-            // Sort by midPrice first
-            recommendations.sort((a, b) => Math.abs(a.price - midPrice) - Math.abs(b.price - midPrice));
+            recommendations.sort((a, b) => Math.abs(a.price - midP) - Math.abs(b.price - midP));
 
             recommendations.forEach(item => {
                 const modelKey = item.model.toLowerCase().slice(0, 15);
                 if (seenModels.has(modelKey)) return;
-
                 if (!brandGroups[item.brand]) brandGroups[item.brand] = [];
                 brandGroups[item.brand].push(item);
                 seenModels.add(modelKey);
@@ -723,16 +700,14 @@ async function searchShoes() {
 
             let finalRecs = [];
             let brands = Object.keys(brandGroups);
-            brands.sort(() => Math.random() - 0.5); // Randomize brands
+            brands.sort(() => Math.random() - 0.5);
 
-            // Pass 1: One from each available brand
             for (const b of brands) {
                 if (finalRecs.length >= 5) break;
                 const top = brandGroups[b].shift();
                 if (top) finalRecs.push(top);
             }
 
-            // Pass 2: Fill remains
             while (finalRecs.length < 5) {
                 let added = false;
                 for (const b of brands) {
@@ -745,23 +720,10 @@ async function searchShoes() {
                 }
                 if (!added) break;
             }
-            recommendations = finalRecs.slice(0, 5);
-        }
-
-        // 3. Last Resort: Local static fallback (if SerpAPI also fails or is blocked)
-        if (recommendations.length === 0) {
-            console.log("No results from API, using last-resort detailed logic");
-            // Since we can't easily inline the massive catalogue, let's just show a user-friendly message
-            // unless we want to fetch data.cjs? No, that's nodejs.
-            // We can fetch data.js, but we refactored it out.
-            // Let's rely on the error message being helpful, or perhaps try one more clever trick?
-            // No, let's stick to the visible error message, but make it very clear.
-        }
-
-        if (recommendations && recommendations.length > 0) {
-            displayResults(recommendations);
+            displayResults(finalRecs.slice(0, 5));
         } else {
-            content.innerHTML = `<div class="no-results-state"><h3>No perfect matches found.</h3><p>Try adjusting your preferences.</p><button class="btn btn-primary" onclick="resetApp()">Try Again</button></div>`;
+            console.log("No results from API, using last-resort detailed logic");
+            content.innerHTML = `<div class="no-results-state"><h3>No perfect matches found.</h3><p>Try adjusting your search or budget.</p><button class="btn btn-primary" onclick="resetApp()">Try Again</button></div>`;
         }
     } catch (e) {
         console.error("Search Error details:", e);

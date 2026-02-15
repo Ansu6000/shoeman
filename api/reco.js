@@ -96,10 +96,12 @@ export default async function handler(req, res) {
             engine: "google_shopping",
             q: searchQuery,
             api_key: SERPAPI_KEY,
-            num: "20", // Request more to allow filtering
+            num: "40", // Request more to allow strict filtering
             gl: "in",
             hl: "en",
-            location: "India"
+            location: "India",
+            // Directly filter at SerpAPI level if supported
+            tbs: `mr:1,price:1,ppr_min:${minPrice},ppr_max:${maxPrice}`
         });
 
         const serpUrl = `https://serpapi.com/search.json?${usp.toString()}`;
@@ -134,8 +136,8 @@ export default async function handler(req, res) {
 
             // Filter by Price and Brand
             finalResults = rawResults.filter(item => {
-                // Price Filter
-                const priceMatch = item.price >= (minPrice * 0.8) && item.price <= (maxPrice * 1.2); // Allow 20% wiggle room
+                // Price Filter - Strict (20% wiggle room but no more)
+                const priceMatch = item.price >= (minPrice * 0.8) && item.price <= (maxPrice * 1.2);
 
                 // Brand Filter
                 let brandMatch = true;
@@ -161,23 +163,6 @@ export default async function handler(req, res) {
 
                 return priceMatch && brandMatch && categoryMatch;
             });
-
-            // If we have too few results, loosen the price constraint slightly before giving up
-            if (finalResults.length < 3) {
-                const supplementary = rawResults.filter(item => {
-                    if (finalResults.find(f => f.model === item.model)) return false;
-
-                    let brandMatch = true;
-                    if (!isSurpriseMe && selectedBrands.length > 0) {
-                        brandMatch = selectedBrands.some(b =>
-                            item.model.toLowerCase().includes(b.toLowerCase()) ||
-                            item.brand.toLowerCase().includes(b.toLowerCase())
-                        );
-                    }
-                    return brandMatch; // Just brand match if price is hard to find
-                });
-                finalResults = [...finalResults, ...supplementary].slice(0, 10);
-            }
         }
 
         // DIVERSITY & DE-DUPLICATION LOGIC
