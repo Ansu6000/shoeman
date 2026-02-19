@@ -542,10 +542,9 @@ function updateUI() {
 // Search
 // ========================
 
-const API_URL = '/api';
-
-// For standalone mode without Vercel API
-const SERPAPI_KEY = '16fad441d9fe8cf7b5db01ebdc42dd99cf42c05c1d5ec70da366ba4d55786ded';
+const API_BASE = window.location.host.includes('localhost') || window.location.protocol === 'file:'
+    ? 'https://shoeman.vercel.app'
+    : '';
 
 async function searchShoes() {
     document.querySelectorAll('.quiz-step').forEach(s => s.classList.remove('active'));
@@ -563,136 +562,40 @@ async function searchShoes() {
             <p class="loading-text">Curating your collection...</p>
         </div>`;
 
-    // Process Params — include size + gender for accurate SerpAPI results
+    // Build query params
     const params = new URLSearchParams({
-        category: selections.category?.id,
-        gender: selections.gender,
-        budgetTier: selections.budget?.id,
+        category: selections.category?.id || '',
+        gender: selections.gender || '',
+        budgetTier: selections.budget?.id || '',
         size: selections.size?.uk || '',
-        attributes: JSON.stringify(selections.attributes)
+        attributes: JSON.stringify(selections.attributes || {})
     });
 
-    console.log("Search attributes:", selections);
+    console.log("Search selections:", selections);
 
     const minP = selections.budget?.min || 0;
     const maxP = selections.budget?.max || 1000000;
     const midP = (minP + maxP) / 2;
 
     try {
-        let recommendations = [];
-        let useBackend = true;
+        const fetchUrl = `${API_BASE}/api/reco?${params}`;
+        console.log("Fetching API:", fetchUrl);
 
-        if (window.location.protocol === 'file:' || window.location.hostname.includes('github.io')) {
-            useBackend = false;
+        const res = await fetch(fetchUrl, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+
+        if (!res.ok) {
+            const errorText = await res.text();
+            console.error("API response error:", res.status, errorText);
+            throw new Error(`API returned ${res.status}: ${errorText}`);
         }
 
-        if (useBackend) {
-            let fetchUrl = '';
-            if (window.location.host.includes('localhost') || window.location.protocol === 'file:') {
-                fetchUrl = `https://shoeman.vercel.app/api/reco?${params}`;
-            } else {
-                fetchUrl = `/api/reco?${params}`;
-            }
+        const data = await res.json();
+        let recommendations = data.recommendations || [];
 
-            console.log("Fetching URL:", fetchUrl);
-
-            try {
-                const res = await fetch(fetchUrl);
-                if (!res.ok) throw new Error(`Backend API Failed ${res.status}`);
-                const data = await res.json();
-                recommendations = data.recommendations || [];
-            } catch (err) {
-                console.warn("Backend unavailable:", err);
-                useBackend = false;
-            }
-        }
-
-        // 2. Client-Side Fallback (Direct SerpAPI)
-        if (!useBackend || recommendations.length === 0) {
-            console.log("Running Client-Side Search Logic...");
-
-            // Construct intelligent query
-            const genderTerm = selections.gender === 'men' ? "Men's" : "Women's";
-            const category = selections.category.id;
-
-            const categoryOptimizers = {
-                "Sneakers": "lifestyle sneakers street style casual -running -performance -sports -marathon",
-                "Running & Sports": "performance running sports shoes marathon training -casual -formal",
-                "Casual": "casual daily wear comfort shoes -formal -sports -running",
-                "Formal": "formal dress shoes oxford derby loafer -sneaker -running -sports"
-            };
-            const optimizationKw = categoryOptimizers[category] || category || "Shoes";
-
-            let selectedBrands = selections.attributes.brand || [];
-            const isSurpriseMe = selectedBrands.includes("Surprise me");
-            const attrs = Object.values(selections.attributes).flat().filter(a => a !== "Surprise me").join(' ');
-
-            let brandQuery = (!isSurpriseMe && selectedBrands.length > 0) ? selectedBrands.join(' ') : '';
-            if (category === "Sneakers" && (isSurpriseMe || selectedBrands.length === 0)) {
-                brandQuery = "popular trending lifestyle";
-            }
-
-            // Prioritize category and gender
-            const query = `${genderTerm} ${brandQuery} ${optimizationKw} ${attrs}`.replace(/\s+/g, ' ').trim();
-            console.log("Searching Google Shopping for:", query);
-
-            // Fetch from SerpAPI directly
-            const url = `https://serpapi.com/search.json?engine=google_shopping&q=${encodeURIComponent(query)}&api_key=${SERPAPI_KEY}&num=40&gl=in&hl=en&location=India&tbs=${encodeURIComponent(`mr:1,price:1,ppr_min:${minP},ppr_max:${maxP}`)}`;
-
-            const resp = await fetch(url);
-            const sData = await resp.json();
-
-            if (sData.error) throw new Error(sData.error);
-
-            const commonBrands = ["Nike", "Adidas", "Puma", "New Balance", "Asics", "Brooks", "Skechers", "Reebok", "Converse", "Vans", "Fila", "Crocs", "Skechers", "Bata", "Woodland", "Red Chief", "Red Tape", "Liberty", "Campus", "Sparx"];
-            const allPossibleBrands = [...new Set([...selectedBrands, ...commonBrands])];
-
-            const rawResults = (sData.shopping_results || []).map(item => {
-                const title = item.title.toLowerCase();
-                let detectedBrand = allPossibleBrands.find(b => title.includes(b.toLowerCase())) || item.title.split(' ')[0];
-
-                return {
-                    brand: detectedBrand, // Correctly group by brand
-                    model: item.title,
-                    price: item.extracted_price || 0,
-                    live_price: item.extracted_price,
-                    image: item.thumbnail,
-                    best_link: item.product_link,
-                    source: item.source || "Google Shopping"
-                };
-            });
-
-            // Filter by Price and Brand
-            recommendations = rawResults.filter(item => {
-                // Price Filter
-                const priceMatch = item.price >= (minP * 0.8) && item.price <= (maxP * 1.2);
-
-                // Brand Filter
-                let brandMatch = true;
-                if (!isSurpriseMe && selectedBrands.length > 0) {
-                    brandMatch = selectedBrands.some(b =>
-                        item.model.toLowerCase().includes(b.toLowerCase()) ||
-                        item.brand.toLowerCase().includes(b.toLowerCase())
-                    );
-                }
-
-                // Category Match
-                let categoryMatch = true;
-                const category = selections.category.id;
-                if (category === "Sneakers") {
-                    const isPerformance = ["running", "marathon", "training", "performance", "sprint"].some(kw =>
-                        item.model.toLowerCase().includes(kw)
-                    );
-                    const isLifestyle = ["sneaker", "casual", "retro", "lifestyle"].some(kw =>
-                        item.model.toLowerCase().includes(kw)
-                    );
-                    if (isPerformance && !isLifestyle) categoryMatch = false;
-                }
-
-                return priceMatch && brandMatch && categoryMatch;
-            });
-        }
-        if (recommendations && recommendations.length > 0) {
+        if (recommendations.length > 0) {
             // DIVERSITY & DE-DUPLICATION LOGIC
             const brandGroups = {};
             const seenModels = new Set();
@@ -730,23 +633,27 @@ async function searchShoes() {
             }
             displayResults(finalRecs.slice(0, 5));
         } else {
-            console.log("No results from API, using last-resort detailed logic");
             content.innerHTML = `<div class="no-results-state"><h3>No perfect matches found.</h3><p>Try adjusting your search or budget.</p><button class="btn btn-primary" onclick="resetApp()">Try Again</button></div>`;
         }
     } catch (e) {
-        console.error("Search Error details:", e);
+        console.error("Search Error:", e);
 
-        let msg = "We couldn't connect to the shoe network.";
-        if (e.message.includes('Failed to fetch')) {
-            msg = "Connection blocked. If using an AdBlocker, please pause it, or try a different browser. (CORS Policy)";
+        let msg = "We couldn't connect to the shoe network. Please try again.";
+        let detail = e.message;
+
+        if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError') || e.message.includes('CORS')) {
+            msg = "Network error — please check your internet connection and try again. If using an AdBlocker, try pausing it.";
+        } else if (e.message.includes('API returned')) {
+            msg = "The search service is temporarily unavailable. Please try again in a moment.";
         }
 
         content.innerHTML = `
             <div class="no-results-state">
                 <h3>Connection Issue</h3>
                 <p>${msg}</p>
-                <p class="error-detail">${e.message}</p>
-                <button class="btn btn-primary" onclick="resetApp()">Retry</button>
+                <p class="error-detail" style="font-size: 0.75rem; opacity: 0.5; margin-top: 0.5rem;">${detail}</p>
+                <button class="btn btn-primary" onclick="searchShoes()" style="margin-top: 1rem;">Retry</button>
+                <button class="btn" onclick="resetApp()" style="margin-top: 0.5rem;">Start Over</button>
             </div>`;
     }
 }
